@@ -49,11 +49,11 @@ jobs:
       
       - name: Run tests
         working-directory: ./app
-        run: ./gradlew test
+        run: ./gradlew test --no-daemon
       
       - name: Build application
         working-directory: ./app
-        run: ./gradlew build
+        run: ./gradlew build --no-daemon
 
   terraform-plan:
     runs-on: ubuntu-latest
