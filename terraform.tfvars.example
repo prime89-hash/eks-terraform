@@ -1,0 +1,24 @@
+# AWS Configuration
+aws_region = "us-west-2"
+
+# Project Configuration
+project_name = "webapp-3tier"
+environment = "prod"
+
+# Network Configuration
+vpc_cidr = "10.0.0.0/16"
+private_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnet_cidrs = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+# EKS Configuration
+kubernetes_version = "1.28"
+app_namespace = "webapp"
+
+# Domain Configuration (update with your domain)
+domain_name = "example.com"
+
+# Database Configuration
+db_instance_class = "db.t3.micro"
+db_name = "webapp"
+db_username = "webapp_user"
+db_password = "ChangeMe123!"  # Use a strong password in production

@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp-3tier
+  namespace: webapp
+  labels:
+    app: webapp-3tier
+    tier: application
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: webapp-3tier
+  template:
+    metadata:
+      labels:
+        app: webapp-3tier
+        tier: application
+    spec:
+      serviceAccountName: webapp-service-account
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      containers:
+      - name: webapp
+        image: ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com/webapp-3tier-app:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: db-host
+        - name: DB_PORT
+          value: "5432"
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: db-name
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: db-username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: webapp-secrets
+              key: db-password
+        - name: ENVIRONMENT
+          value: "production"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+  namespace: webapp
+  labels:
+    app: webapp-3tier
+spec:
+  selector:
+    app: webapp-3tier
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webapp-service-account
+  namespace: webapp
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT_ID:role/webapp-3tier-pod-role
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webapp-secrets
+  namespace: webapp
+type: Opaque
+data:
+  db-host: # Base64 encoded RDS endpoint
+  db-name: d2ViYXBw # webapp
+  db-username: d2ViYXBwX3VzZXI= # webapp_user
+  db-password: Q2hhbmdlTWUxMjMh # ChangeMe123!
