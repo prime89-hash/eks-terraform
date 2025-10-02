@@ -1,5 +1,7 @@
 # 3-Tier Web Application on AWS EKS with Fargate
 
+<!-- CI/CD Pipeline Test - Deployment Ready -->
+
 A production-ready 3-tier web application deployed on AWS EKS using Fargate, with comprehensive security, monitoring, and CI/CD capabilities.
 
 ## 🏗️ Architecture Overview
