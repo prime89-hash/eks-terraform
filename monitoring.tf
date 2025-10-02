@@ -97,38 +97,24 @@ resource "helm_release" "aws_xray" {
   depends_on = [module.eks]
 }
 
-# Service Monitor for application metrics
-resource "kubernetes_manifest" "webapp_service_monitor" {
-  manifest = {
-    apiVersion = "monitoring.coreos.com/v1"
-    kind       = "ServiceMonitor"
-    metadata = {
-      name      = "webapp-service-monitor"
-      namespace = var.app_namespace
-      labels = {
-        app = "webapp-3tier"
-      }
-    }
-    spec = {
-      selector = {
-        matchLabels = {
-          app = "webapp-3tier"
-        }
-      }
-      endpoints = [
-        {
-          port = "http"
-          path = "/actuator/prometheus"
-        }
-      ]
-    }
-  }
-
-  depends_on = [
-    helm_release.prometheus,
-    kubernetes_namespace.app
-  ]
-}
+# Service Monitor for application metrics (deploy after cluster is ready)
+# This should be applied manually after the cluster is deployed:
+# kubectl apply -f - <<EOF
+# apiVersion: monitoring.coreos.com/v1
+# kind: ServiceMonitor
+# metadata:
+#   name: webapp-service-monitor
+#   namespace: webapp
+#   labels:
+#     app: webapp-3tier
+# spec:
+#   selector:
+#     matchLabels:
+#       app: webapp-3tier
+#   endpoints:
+#   - port: http
+#     path: /actuator/prometheus
+# EOF
 
 # CloudWatch Alarms
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {

@@ -420,26 +420,20 @@ resource "aws_api_gateway_stage" "main" {
   # Enable detailed CloudWatch metrics
   xray_tracing_enabled = true
 
-  # Access logging configuration
-  access_log_destination_arn = aws_cloudwatch_log_group.api_gateway.arn
-  access_log_format = jsonencode({
-    requestId      = "$context.requestId"
-    ip             = "$context.identity.sourceIp"
-    caller         = "$context.identity.caller"
-    user           = "$context.identity.user"
-    requestTime    = "$context.requestTime"
-    httpMethod     = "$context.httpMethod"
-    resourcePath   = "$context.resourcePath"
-    status         = "$context.status"
-    protocol       = "$context.protocol"
-    responseLength = "$context.responseLength"
-    responseTime   = "$context.responseTime"
-    error          = "$context.error.message"
-    errorType      = "$context.error.messageString"
-  })
-
   tags = {
     Name = "${var.project_name}-api-stage"
+  }
+}
+
+# Method Settings for logging
+resource "aws_api_gateway_method_settings" "main" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  stage_name  = aws_api_gateway_stage.main.stage_name
+  method_path = "*/*"
+
+  settings {
+    metrics_enabled = true
+    logging_level   = "INFO"
   }
 }
 

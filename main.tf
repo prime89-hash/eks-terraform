@@ -258,26 +258,32 @@ resource "aws_ecr_repository" "app" {
     encryption_type = "AES256"
   }
 
-  # Lifecycle policy to manage image retention and costs
-  lifecycle_policy {
-    policy = jsonencode({
-      rules = [
-        {
-          rulePriority = 1
-          description  = "Keep last 10 tagged images"
-          selection = {
-            tagStatus     = "tagged"
-            tagPrefixList = ["v"]
-            countType     = "imageCountMoreThan"
-            countNumber   = 10
-          }
-          action = {
-            type = "expire"
-          }
-        }
-      ]
-    })
+  tags = {
+    Name = "${var.project_name}-ecr-repository"
   }
+}
+
+# ECR Lifecycle Policy
+resource "aws_ecr_lifecycle_policy" "app" {
+  repository = aws_ecr_repository.app.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Keep last 10 tagged images"
+        selection = {
+          tagStatus     = "tagged"
+          tagPrefixList = ["v"]
+          countType     = "imageCountMoreThan"
+          countNumber   = 10
+        }
+        action = {
+          type = "expire"
+        }
+      }
+    ]
+  })
 }
 
 # =============================================================================
@@ -465,6 +471,34 @@ provider "helm" {
 # AWS LOAD BALANCER CONTROLLER
 # =============================================================================
 # Manages ALB/NLB resources from Kubernetes Ingress
+
+# IAM Role for AWS Load Balancer Controller
+resource "aws_iam_role" "aws_load_balancer_controller" {
+  name = "${var.project_name}-aws-load-balancer-controller"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Effect = "Allow"
+        Principal = {
+          Federated = module.eks.oidc_provider_arn
+        }
+        Condition = {
+          StringEquals = {
+            "${replace(module.eks.cluster_oidc_issuer_url, "https://", "")}:sub" = "system:serviceaccount:kube-system:aws-load-balancer-controller"
+            "${replace(module.eks.cluster_oidc_issuer_url, "https://", "")}:aud" = "sts.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-alb-controller-role"
+  }
+}
 
 # Service Account with IAM role for AWS API access
 resource "kubernetes_service_account" "aws_load_balancer_controller" {
