@@ -139,8 +139,18 @@ output "ecr_login" {
 # =============================================================================
 
 output "grafana_access" {
-  description = "Command to access Grafana dashboard"
-  value       = "kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80"
+  description = "Commands to access Grafana dashboard"
+  value       = {
+    port_forward = "kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80"
+    username     = "admin"
+    password     = "admin123"
+    url          = "http://localhost:3000"
+  }
+}
+
+output "prometheus_access" {
+  description = "Command to access Prometheus"
+  value       = "kubectl port-forward -n monitoring svc/prometheus-kube-prometheus-prometheus 9090:9090"
 }
 
 output "application_health_check" {

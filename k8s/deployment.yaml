@@ -29,6 +29,9 @@ spec:
         ports:
         - containerPort: 8080
           name: http
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
         env:
         - name: DB_HOST
           valueFrom:
@@ -99,6 +102,10 @@ spec:
     targetPort: 8080
     protocol: TCP
     name: http
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: metrics
   type: ClusterIP
 ---
 apiVersion: v1

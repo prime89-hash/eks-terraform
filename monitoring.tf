@@ -1,18 +1,39 @@
-# Prometheus and Grafana for monitoring
+# =============================================================================
+# MONITORING AND OBSERVABILITY STACK
+# =============================================================================
+# Comprehensive monitoring setup with Prometheus, Grafana, and CloudWatch
+
+# Create monitoring namespace
+resource "kubernetes_namespace" "monitoring" {
+  metadata {
+    name = "monitoring"
+    labels = {
+      name = "monitoring"
+    }
+  }
+  depends_on = [module.eks]
+}
+
+# =============================================================================
+# PROMETHEUS STACK
+# =============================================================================
+# Prometheus and Grafana for monitoring using kube-prometheus-stack
+
 resource "helm_release" "prometheus" {
   name       = "prometheus"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
   namespace  = "monitoring"
-  version    = "51.2.0"
+  version    = "55.5.0"
 
-  create_namespace = true
+  create_namespace = false  # We create it above
 
   values = [
     yamlencode({
+      # Prometheus configuration
       prometheus = {
         prometheusSpec = {
-          retention = "7d"
+          retention = "15d"
           storageSpec = {
             volumeClaimTemplate = {
               spec = {
@@ -20,24 +41,82 @@ resource "helm_release" "prometheus" {
                 accessModes      = ["ReadWriteOnce"]
                 resources = {
                   requests = {
-                    storage = "10Gi"
+                    storage = "20Gi"
                   }
                 }
               }
             }
           }
+          # Service monitor selector
+          serviceMonitorSelectorNilUsesHelmValues = false
+          serviceMonitorSelector = {}
+          podMonitorSelectorNilUsesHelmValues = false
+          podMonitorSelector = {}
+          ruleSelectorNilUsesHelmValues = false
+          ruleSelector = {}
+        }
+        service = {
+          type = "ClusterIP"
         }
       }
+      
+      # Grafana configuration
       grafana = {
         adminPassword = "admin123"
         service = {
-          type = "LoadBalancer"
+          type = "ClusterIP"
         }
         persistence = {
           enabled = true
-          size    = "5Gi"
+          size    = "10Gi"
+          storageClassName = "gp2"
+        }
+        # Default dashboards
+        defaultDashboardsEnabled = true
+        # Additional dashboards
+        dashboardProviders = {
+          "dashboardproviders.yaml" = {
+            apiVersion = 1
+            providers = [
+              {
+                name = "default"
+                orgId = 1
+                folder = ""
+                type = "file"
+                disableDeletion = false
+                editable = true
+                options = {
+                  path = "/var/lib/grafana/dashboards/default"
+                }
+              }
+            ]
+          }
+        }
+        dashboards = {
+          default = {
+            # Kubernetes cluster monitoring dashboard
+            kubernetes-cluster = {
+              gnetId = 7249
+              revision = 1
+              datasource = "Prometheus"
+            }
+            # Node exporter dashboard
+            node-exporter = {
+              gnetId = 1860
+              revision = 27
+              datasource = "Prometheus"
+            }
+            # Application dashboard
+            spring-boot = {
+              gnetId = 12900
+              revision = 1
+              datasource = "Prometheus"
+            }
+          }
         }
       }
+      
+      # Alertmanager configuration
       alertmanager = {
         alertmanagerSpec = {
           storage = {
@@ -54,14 +133,123 @@ resource "helm_release" "prometheus" {
             }
           }
         }
+        service = {
+          type = "ClusterIP"
+        }
+      }
+      
+      # Node exporter
+      nodeExporter = {
+        enabled = true
+      }
+      
+      # Kube state metrics
+      kubeStateMetrics = {
+        enabled = true
       }
     })
   ]
 
-  depends_on = [module.eks]
+  depends_on = [
+    module.eks,
+    kubernetes_namespace.monitoring
+  ]
 }
 
-# CloudWatch Container Insights
+# =============================================================================
+# APPLICATION SERVICE MONITOR
+# =============================================================================
+# ServiceMonitor for Spring Boot application metrics
+
+resource "kubernetes_manifest" "webapp_service_monitor" {
+  manifest = {
+    apiVersion = "monitoring.coreos.com/v1"
+    kind       = "ServiceMonitor"
+    metadata = {
+      name      = "webapp-service-monitor"
+      namespace = "monitoring"
+      labels = {
+        app = "webapp-3tier"
+        release = "prometheus"
+      }
+    }
+    spec = {
+      selector = {
+        matchLabels = {
+          app = "webapp-3tier"
+        }
+      }
+      namespaceSelector = {
+        matchNames = [var.app_namespace]
+      }
+      endpoints = [
+        {
+          port = "http"
+          path = "/actuator/prometheus"
+          interval = "30s"
+        }
+      ]
+    }
+  }
+
+  depends_on = [
+    helm_release.prometheus,
+    kubernetes_namespace.app
+  ]
+}
+
+# =============================================================================
+# GRAFANA INGRESS (Optional)
+# =============================================================================
+# Ingress for Grafana dashboard access
+
+resource "kubernetes_manifest" "grafana_ingress" {
+  manifest = {
+    apiVersion = "networking.k8s.io/v1"
+    kind       = "Ingress"
+    metadata = {
+      name      = "grafana-ingress"
+      namespace = "monitoring"
+      annotations = {
+        "kubernetes.io/ingress.class" = "alb"
+        "alb.ingress.kubernetes.io/scheme" = "internet-facing"
+        "alb.ingress.kubernetes.io/target-type" = "ip"
+        "alb.ingress.kubernetes.io/listen-ports" = "[{\"HTTP\": 80}]"
+        "alb.ingress.kubernetes.io/healthcheck-path" = "/api/health"
+      }
+    }
+    spec = {
+      rules = [
+        {
+          http = {
+            paths = [
+              {
+                path = "/"
+                pathType = "Prefix"
+                backend = {
+                  service = {
+                    name = "prometheus-grafana"
+                    port = {
+                      number = 80
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+
+  depends_on = [helm_release.prometheus]
+}
+
+# =============================================================================
+# CLOUDWATCH CONTAINER INSIGHTS
+# =============================================================================
+# AWS native monitoring for EKS
+
 resource "aws_eks_addon" "cloudwatch_observability" {
   cluster_name = module.eks.cluster_name
   addon_name   = "amazon-cloudwatch-observability"
@@ -69,54 +257,11 @@ resource "aws_eks_addon" "cloudwatch_observability" {
   depends_on = [module.eks]
 }
 
-# X-Ray for distributed tracing
-resource "helm_release" "aws_xray" {
-  name       = "aws-xray"
-  repository = "https://aws.github.io/eks-charts"
-  chart      = "aws-for-fluent-bit"
-  namespace  = "amazon-cloudwatch"
-  version    = "0.1.25"
+# =============================================================================
+# CLOUDWATCH ALARMS
+# =============================================================================
+# CloudWatch alarms for critical metrics
 
-  create_namespace = true
-
-  set {
-    name  = "cloudWatchLogs.enabled"
-    value = "true"
-  }
-
-  set {
-    name  = "cloudWatchLogs.region"
-    value = var.aws_region
-  }
-
-  set {
-    name  = "cloudWatchLogs.logGroupName"
-    value = "/aws/containerinsights/${module.eks.cluster_name}/application"
-  }
-
-  depends_on = [module.eks]
-}
-
-# Service Monitor for application metrics (deploy after cluster is ready)
-# This should be applied manually after the cluster is deployed:
-# kubectl apply -f - <<EOF
-# apiVersion: monitoring.coreos.com/v1
-# kind: ServiceMonitor
-# metadata:
-#   name: webapp-service-monitor
-#   namespace: webapp
-#   labels:
-#     app: webapp-3tier
-# spec:
-#   selector:
-#     matchLabels:
-#       app: webapp-3tier
-#   endpoints:
-#   - port: http
-#     path: /actuator/prometheus
-# EOF
-
-# CloudWatch Alarms
 resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "${var.project_name}-high-cpu"
   comparison_operator = "GreaterThanThreshold"
@@ -166,7 +311,11 @@ resource "aws_sns_topic_subscription" "email_alerts" {
   endpoint  = "admin@example.com"  # Change this to your email
 }
 
+# =============================================================================
+# CLOUDWATCH DASHBOARD
+# =============================================================================
 # Application Performance Monitoring Dashboard
+
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${var.project_name}-dashboard"
 
@@ -213,6 +362,26 @@ resource "aws_cloudwatch_dashboard" "main" {
           stacked = false
           region  = var.aws_region
           title   = "RDS Database Metrics"
+          period  = 300
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 12
+        width  = 12
+        height = 6
+
+        properties = {
+          metrics = [
+            ["AWS/EKS", "cluster_failed_request_count", "ClusterName", module.eks.cluster_name],
+            [".", "cluster_node_count", ".", "."],
+            [".", "cluster_pod_count", ".", "."]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = var.aws_region
+          title   = "EKS Cluster Metrics"
           period  = 300
         }
       }
