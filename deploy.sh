@@ -102,6 +102,13 @@ kubectl rollout status deployment/webapp-3tier -n webapp --timeout=300s
 # Deploy ingress
 kubectl apply -f k8s/ingress.yaml
 
+# Deploy monitoring resources
+echo "📊 Deploying monitoring resources..."
+kubectl apply -f k8s/monitoring-resources.yaml
+
+# Wait for ServiceMonitor (may timeout, which is normal)
+kubectl wait --for=condition=Ready servicemonitor/webapp-service-monitor -n monitoring --timeout=60s || echo "ServiceMonitor creation timeout (this is normal)"
+
 # Get load balancer DNS
 echo "⏳ Waiting for load balancer to be provisioned..."
 sleep 60

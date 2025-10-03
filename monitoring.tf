@@ -160,90 +160,19 @@ resource "helm_release" "prometheus" {
 # APPLICATION SERVICE MONITOR
 # =============================================================================
 # ServiceMonitor for Spring Boot application metrics
+# This will be applied after cluster deployment via post-deployment script
 
-resource "kubernetes_manifest" "webapp_service_monitor" {
-  manifest = {
-    apiVersion = "monitoring.coreos.com/v1"
-    kind       = "ServiceMonitor"
-    metadata = {
-      name      = "webapp-service-monitor"
-      namespace = "monitoring"
-      labels = {
-        app = "webapp-3tier"
-        release = "prometheus"
-      }
-    }
-    spec = {
-      selector = {
-        matchLabels = {
-          app = "webapp-3tier"
-        }
-      }
-      namespaceSelector = {
-        matchNames = [var.app_namespace]
-      }
-      endpoints = [
-        {
-          port = "http"
-          path = "/actuator/prometheus"
-          interval = "30s"
-        }
-      ]
-    }
-  }
-
-  depends_on = [
-    helm_release.prometheus,
-    kubernetes_namespace.app
-  ]
-}
+# Note: ServiceMonitor will be created by post-deployment script
+# See: k8s/monitoring-resources.yaml
 
 # =============================================================================
 # GRAFANA INGRESS (Optional)
 # =============================================================================
 # Ingress for Grafana dashboard access
+# This will be applied after cluster deployment via post-deployment script
 
-resource "kubernetes_manifest" "grafana_ingress" {
-  manifest = {
-    apiVersion = "networking.k8s.io/v1"
-    kind       = "Ingress"
-    metadata = {
-      name      = "grafana-ingress"
-      namespace = "monitoring"
-      annotations = {
-        "kubernetes.io/ingress.class" = "alb"
-        "alb.ingress.kubernetes.io/scheme" = "internet-facing"
-        "alb.ingress.kubernetes.io/target-type" = "ip"
-        "alb.ingress.kubernetes.io/listen-ports" = "[{\"HTTP\": 80}]"
-        "alb.ingress.kubernetes.io/healthcheck-path" = "/api/health"
-      }
-    }
-    spec = {
-      rules = [
-        {
-          http = {
-            paths = [
-              {
-                path = "/"
-                pathType = "Prefix"
-                backend = {
-                  service = {
-                    name = "prometheus-grafana"
-                    port = {
-                      number = 80
-                    }
-                  }
-                }
-              }
-            ]
-          }
-        }
-      ]
-    }
-  }
-
-  depends_on = [helm_release.prometheus]
-}
+# Note: Grafana ingress will be created by post-deployment script
+# See: k8s/monitoring-resources.yaml
 
 # =============================================================================
 # CLOUDWATCH CONTAINER INSIGHTS

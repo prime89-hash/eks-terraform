@@ -210,6 +210,13 @@ jobs:
         run: |
           kubectl apply -f k8s/deployment.yaml
           kubectl rollout status deployment/webapp-3tier -n webapp --timeout=300s
+          
+          # Deploy monitoring resources after application is ready
+          echo "Deploying monitoring resources..."
+          kubectl apply -f k8s/monitoring-resources.yaml
+          
+          # Wait for ServiceMonitor to be created
+          kubectl wait --for=condition=Ready servicemonitor/webapp-service-monitor -n monitoring --timeout=60s || echo "ServiceMonitor creation timeout (this is normal)"
       
       - name: Get application URL
         run: |

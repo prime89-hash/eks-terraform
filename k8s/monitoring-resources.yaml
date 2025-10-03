@@ -1,0 +1,44 @@
+# ServiceMonitor for Spring Boot application metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: webapp-service-monitor
+  namespace: monitoring
+  labels:
+    app: webapp-3tier
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: webapp-3tier
+  namespaceSelector:
+    matchNames:
+      - webapp
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
+    interval: 30s
+---
+# Optional: Grafana Ingress for external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: monitoring
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-grafana
+            port:
+              number: 80
