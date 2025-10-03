@@ -91,23 +91,36 @@ sed -i.bak "s|CERTIFICATE_ARN|$CERTIFICATE_ARN|g" k8s/ingress.yaml
 sed -i.bak "s|ALB_SECURITY_GROUP_ID|$ALB_SG_ID|g" k8s/ingress.yaml
 sed -i.bak "s|PUBLIC_SUBNET_IDS|$PUBLIC_SUBNET_IDS|g" k8s/ingress.yaml
 
-# Deploy to Kubernetes
-echo "☸️ Deploying application to Kubernetes..."
-kubectl apply -f k8s/deployment.yaml
+# Get deployment values
+echo "📊 Getting deployment values..."
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
+CERTIFICATE_ARN=$(terraform output -raw certificate_arn)
+ECR_REPO=$(terraform output -raw ecr_repository_url)
+
+# Create Kubernetes secret
+echo "🔐 Creating Kubernetes secrets..."
+kubectl create secret generic webapp-secrets -n webapp \
+  --from-literal=db-host="$RDS_ENDPOINT" \
+  --from-literal=db-name="webapp" \
+  --from-literal=db-username="webapp_user" \
+  --from-literal=db-password="YourSecurePassword123!" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Deploy with Helm
+echo "⚓ Deploying application with Helm..."
+helm upgrade --install webapp-3tier ./helm/webapp-3tier \
+  --namespace webapp \
+  --create-namespace \
+  --set image.repository="$ECR_REPO" \
+  --set image.tag="latest" \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"="arn:aws:iam::$ACCOUNT_ID:role/webapp-3tier-pod-role" \
+  --set ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"="$CERTIFICATE_ARN" \
+  --wait --timeout=300s
 
 # Wait for deployment
 echo "⏳ Waiting for deployment to be ready..."
 kubectl rollout status deployment/webapp-3tier -n webapp --timeout=300s
-
-# Deploy ingress
-kubectl apply -f k8s/ingress.yaml
-
-# Deploy monitoring resources
-echo "📊 Deploying monitoring resources..."
-kubectl apply -f k8s/monitoring-resources.yaml
-
-# Wait for ServiceMonitor (may timeout, which is normal)
-kubectl wait --for=condition=Ready servicemonitor/webapp-service-monitor -n monitoring --timeout=60s || echo "ServiceMonitor creation timeout (this is normal)"
 
 # Get load balancer DNS
 echo "⏳ Waiting for load balancer to be provisioned..."

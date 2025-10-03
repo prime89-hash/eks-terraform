@@ -1,0 +1,17 @@
+apiVersion: v2
+name: webapp-3tier
+description: A 3-tier web application on EKS with monitoring
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - webapp
+  - spring-boot
+  - postgresql
+  - monitoring
+home: https://github.com/prime89-hash/eks-terraform
+sources:
+  - https://github.com/prime89-hash/eks-terraform
+maintainers:
+  - name: DevOps Team
+    email: devops@example.com
