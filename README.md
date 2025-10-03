@@ -4,24 +4,119 @@
 
 A production-ready 3-tier web application deployed on AWS EKS using Fargate, with comprehensive security, monitoring, and CI/CD capabilities.
 
+## 📚 Complete Documentation
+
+### 🚀 **[END-TO-END DEPLOYMENT GUIDE](./END_TO_END_GUIDE.md)**
+**→ Start here for complete step-by-step instructions**
+- Complete architecture explanation
+- Prerequisites and setup
+- Detailed deployment steps
+- Code structure walkthrough
+- Testing and validation
+
+### 🏗️ **[ARCHITECTURE DOCUMENTATION](./ARCHITECTURE.md)**
+**→ Understand the system design**
+- Detailed architecture diagrams
+- Network topology
+- Security layers
+- Scaling strategies
+- Disaster recovery
+
+### 📊 **[MONITORING GUIDE](./MONITORING_GUIDE.md)**
+**→ Learn about observability**
+- Prometheus and Grafana setup
+- Custom dashboards
+- Alerting configuration
+- Troubleshooting monitoring
+
+### 🔧 **[DEPLOYMENT GUIDE](./DEPLOYMENT_GUIDE.md)**
+**→ Detailed deployment instructions**
+- Manual deployment steps
+- CI/CD pipeline setup
+- Configuration options
+- Best practices
+
 ## 🏗️ Architecture Overview
 
 ### 3-Tier Architecture
-- **Presentation Tier**: Application Load Balancer (ALB) with TLS termination
-- **Application Tier**: Java Spring Boot application running on EKS Fargate
-- **Data Tier**: Amazon RDS PostgreSQL with encryption at rest
+- **Presentation Tier**: API Gateway + Application Load Balancer with TLS
+- **Application Tier**: Java Spring Boot on EKS Fargate with auto-scaling
+- **Data Tier**: Amazon RDS PostgreSQL with encryption and backups
 
-### AWS Services Used
-- **EKS Fargate**: Serverless Kubernetes compute
-- **ECR**: Container registry for Docker images
-- **ALB**: Application Load Balancer with TLS
-- **RDS**: PostgreSQL database with encryption
-- **VPC**: Private/public subnets across 3 AZs
-- **ACM**: SSL/TLS certificates
-- **WAF**: Web Application Firewall
-- **CloudWatch**: Monitoring and logging
-- **Secrets Manager**: Secure credential storage
-- **KMS**: Encryption key management
+### Key Features
+- ✅ **Serverless Compute**: EKS Fargate for zero server management
+- ✅ **Complete Monitoring**: Prometheus, Grafana, CloudWatch integration
+- ✅ **Production Security**: WAF, encryption, network isolation, IAM
+- ✅ **Auto-scaling**: Horizontal Pod Autoscaler based on CPU/memory
+- ✅ **CI/CD Pipeline**: GitHub Actions with OIDC authentication
+- ✅ **High Availability**: Multi-AZ deployment across 3 availability zones
+
+## 🚀 Quick Start
+
+### Option 1: One-Command Deployment
+```bash
+git clone https://github.com/prime89-hash/eks-terraform.git
+cd eks-terraform
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values
+./deploy.sh
+```
+
+### Option 2: CI/CD Pipeline
+1. Fork this repository
+2. Configure GitHub secrets: `AWS_ROLE_ARN`
+3. Push to main branch → automatic deployment
+
+### Option 3: Manual Terraform
+```bash
+terraform init
+terraform plan -var-file="terraform.tfvars"
+terraform apply -var-file="terraform.tfvars"
+```
+
+## 📊 What Gets Deployed
+
+### AWS Infrastructure (134+ Resources)
+- **EKS Cluster**: Fargate-only with managed add-ons
+- **VPC**: 3 public + 3 private subnets across 3 AZs
+- **RDS**: PostgreSQL with encryption and automated backups
+- **API Gateway**: REST API with VPC Link and custom domain
+- **Load Balancers**: ALB for HTTPS + NLB for VPC Link
+- **Security**: WAF, KMS encryption, Secrets Manager
+- **Monitoring**: Complete Prometheus/Grafana stack
+
+### Application Stack
+- **Backend**: Java 17 + Spring Boot 3.1.5
+- **Container**: Multi-stage Docker build with security best practices
+- **Metrics**: Micrometer + Prometheus integration
+- **Health Checks**: Kubernetes probes + application endpoints
+
+## 🔍 Access Your Application
+
+After deployment, access your application:
+
+```bash
+# Get deployment information
+terraform output deployment_summary
+
+# Access Grafana monitoring
+kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
+# Open: http://localhost:3000 (admin/admin123)
+
+# Test API endpoints
+./test-api.sh
+```
+
+## 💰 Cost Estimate
+
+**Monthly costs (us-west-2):**
+- EKS Cluster: $73
+- Fargate (3 pods): $30
+- RDS t3.micro: $13
+- ALB: $23
+- NAT Gateways: $135
+- API Gateway: $3.50
+- **Total: ~$277/month**
 
 ## 🔒 Security Features
 
@@ -44,241 +139,87 @@ A production-ready 3-tier web application deployed on AWS EKS using Fargate, wit
 - ECR image scanning enabled
 - Container image vulnerability scanning
 
-## 🚀 Quick Start
+## 📈 Monitoring & Observability
 
-### Prerequisites
-- AWS CLI configured with appropriate permissions
-- Terraform >= 1.5.0
-- kubectl
-- Docker (for local development)
+### Included Monitoring Stack
+- **Prometheus**: Metrics collection and storage
+- **Grafana**: Visualization with pre-built dashboards
+- **AlertManager**: Alert handling and notifications
+- **CloudWatch**: AWS native monitoring and logging
+- **Container Insights**: EKS-specific metrics
 
-### 1. Clone and Configure
-```bash
-git clone <repository-url>
-cd eks-terraform
+### Pre-configured Dashboards
+- Kubernetes Cluster Overview (Grafana ID: 7249)
+- Node Exporter Dashboard (Grafana ID: 1860)
+- Spring Boot Application Dashboard (Grafana ID: 12900)
+- Custom CloudWatch dashboard for AWS resources
 
-# Update variables in variables.tf or create terraform.tfvars
-cp terraform.tfvars.example terraform.tfvars
-```
-
-### 2. Deploy Infrastructure
-```bash
-# Initialize Terraform
-terraform init
-
-# Plan deployment
-terraform plan -var="environment=prod"
-
-# Deploy infrastructure
-terraform apply -var="environment=prod"
-```
-
-### 3. Configure kubectl
-```bash
-aws eks update-kubeconfig --region us-west-2 --name webapp-3tier-cluster
-```
-
-### 4. Deploy Application
-```bash
-# Update Kubernetes manifests with your values
-kubectl apply -f k8s/deployment.yaml
-kubectl apply -f k8s/ingress.yaml
-```
-
-## 🔧 Configuration
-
-### Environment Variables
-Create `terraform.tfvars`:
-```hcl
-aws_region = "us-west-2"
-project_name = "webapp-3tier"
-environment = "prod"
-domain_name = "yourdomain.com"
-db_password = "YourSecurePassword123!"
-```
-
-### Required AWS Permissions
-Your AWS user/role needs:
-- EKS cluster management
-- EC2 and VPC management
-- RDS management
-- ECR repository management
-- IAM role creation
-- ACM certificate management
-- Route53 (if using custom domain)
-
-## 🏃‍♂️ CI/CD Pipeline
+## 🔄 CI/CD Pipeline
 
 ### GitHub Actions Workflow
 The repository includes a complete CI/CD pipeline:
 
 1. **Test**: Runs unit tests and builds the application
-2. **Build & Push**: Creates Docker image and pushes to ECR
-3. **Deploy Infrastructure**: Applies Terraform changes
-4. **Deploy Application**: Updates Kubernetes deployments
+2. **Infrastructure Deploy**: Creates all AWS resources with Terraform
+3. **Build & Push**: Creates Docker image and pushes to ECR
+4. **Application Deploy**: Deploys to Kubernetes with rolling updates
 
-### Setup CI/CD
-1. Fork this repository
-2. Configure GitHub secrets:
-   - `AWS_ROLE_ARN`: OIDC role for GitHub Actions
-3. Push to main branch to trigger deployment
-
-### Manual Deployment Trigger
-```bash
-# Deploy
-gh workflow run deploy.yml -f action=deploy
-
-# Destroy
-gh workflow run deploy.yml -f action=destroy
-```
-
-## 📊 Monitoring & Observability
-
-### Included Monitoring Stack
-- **Prometheus**: Metrics collection
-- **Grafana**: Visualization dashboards
-- **CloudWatch**: AWS native monitoring
-- **Container Insights**: EKS-specific metrics
-- **X-Ray**: Distributed tracing
-
-### Access Monitoring
-```bash
-# Get Grafana admin password
-kubectl get secret -n monitoring prometheus-grafana -o jsonpath="{.data.admin-password}" | base64 --decode
-
-# Port forward to access Grafana
-kubectl port-forward -n monitoring svc/prometheus-grafana 3000:80
-```
-
-### CloudWatch Dashboards
-- Application Load Balancer metrics
-- RDS database performance
-- EKS cluster health
-- Custom application metrics
+### Pipeline Features
+- **OIDC Authentication**: Secure AWS access without long-lived credentials
+- **Terraform State**: Managed state with proper locking
+- **Docker Multi-stage**: Optimized container builds
+- **Rolling Deployments**: Zero-downtime application updates
 
 ## 🧪 Testing
 
-### Local Development
+### Automated Testing
 ```bash
-cd app
-./gradlew bootRun
+# Run comprehensive API test suite
+./test-api.sh
+
+# Load testing
+hey -n 1000 -c 10 https://your-application-url/
 ```
 
 ### Health Checks
 ```bash
 # Application health
-curl https://your-domain.com/health
+curl https://your-alb-dns/health
+
+# API Gateway health  
+curl https://your-api-gateway-url/health
 
 # Kubernetes health
 kubectl get pods -n webapp
-kubectl describe deployment webapp-3tier -n webapp
 ```
 
-### Load Testing
-```bash
-# Install hey for load testing
-go install github.com/rakyll/hey@latest
-
-# Run load test
-hey -n 1000 -c 10 https://your-domain.com/
-```
-
-## 🔍 Troubleshooting
+## 🔧 Troubleshooting
 
 ### Common Issues
-
-**1. EKS Cluster Access**
-```bash
-# Update kubeconfig
-aws eks update-kubeconfig --region us-west-2 --name webapp-3tier-cluster
-
-# Check cluster status
-kubectl cluster-info
-```
-
-**2. Pod Startup Issues**
-```bash
-# Check pod logs
-kubectl logs -n webapp deployment/webapp-3tier
-
-# Check pod events
-kubectl describe pod -n webapp -l app=webapp-3tier
-```
-
-**3. Database Connectivity**
-```bash
-# Test database connection
-kubectl exec -it -n webapp deployment/webapp-3tier -- nc -zv <rds-endpoint> 5432
-```
-
-**4. Load Balancer Issues**
-```bash
-# Check ALB status
-kubectl describe ingress -n webapp webapp-ingress
-
-# Check target group health
-aws elbv2 describe-target-health --target-group-arn <target-group-arn>
-```
+- **EKS Access**: Update kubeconfig with `aws eks update-kubeconfig`
+- **Pod Issues**: Check logs with `kubectl logs -n webapp deployment/webapp-3tier`
+- **Database**: Verify security groups and network connectivity
+- **API Gateway**: Check VPC Link status and NLB health
 
 ### Debugging Commands
 ```bash
-# Check all resources
+# Get all resources
 kubectl get all -n webapp
 
-# Check secrets
-kubectl get secrets -n webapp
+# Check events
+kubectl get events --sort-by=.metadata.creationTimestamp
 
-# Check service accounts
-kubectl get serviceaccounts -n webapp
-
-# Check network policies
-kubectl get networkpolicies -n webapp
+# View application logs
+kubectl logs -f deployment/webapp-3tier -n webapp
 ```
-
-## 💰 Cost Optimization
-
-### Estimated Monthly Costs (us-west-2)
-- **EKS Cluster**: $73/month
-- **Fargate**: ~$30/month (3 pods, 0.25 vCPU, 0.5GB each)
-- **RDS t3.micro**: ~$13/month
-- **ALB**: ~$23/month
-- **NAT Gateway**: ~$45/month
-- **Data Transfer**: Variable
-
-**Total Estimated**: ~$184/month
-
-### Cost Reduction Tips
-- Use Spot instances for non-production
-- Implement pod autoscaling
-- Use RDS reserved instances
-- Monitor and optimize data transfer
-
-## 🔐 Security Best Practices
-
-### Implemented Security Measures
-- ✅ Network segmentation with private subnets
-- ✅ Security groups with minimal access
-- ✅ WAF with managed rules
-- ✅ TLS encryption in transit
-- ✅ Encryption at rest (RDS, EBS)
-- ✅ Non-root container execution
-- ✅ Image vulnerability scanning
-- ✅ Secrets management with AWS Secrets Manager
-- ✅ IAM roles with least privilege
-- ✅ VPC Flow Logs for monitoring
-
-### Additional Recommendations
-- Implement pod security policies
-- Use admission controllers
-- Regular security audits
-- Implement backup strategies
-- Monitor for compliance violations
 
 ## 📚 Additional Resources
 
-- [EKS Best Practices Guide](https://aws.github.io/aws-eks-best-practices/)
+- [AWS EKS Best Practices Guide](https://aws.github.io/aws-eks-best-practices/)
 - [Kubernetes Security Best Practices](https://kubernetes.io/docs/concepts/security/)
 - [Spring Boot Production Best Practices](https://docs.spring.io/spring-boot/docs/current/reference/html/deployment.html)
+- [Prometheus Documentation](https://prometheus.io/docs/)
+- [Grafana Documentation](https://grafana.com/docs/)
 
 ## 🤝 Contributing
 
@@ -291,3 +232,7 @@ kubectl get networkpolicies -n webapp
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
+
+🎉 **Ready to deploy?** Start with the **[END-TO-END DEPLOYMENT GUIDE](./END_TO_END_GUIDE.md)** for complete instructions!
