@@ -92,7 +92,7 @@ output "api_gateway_url" {
 
 output "api_gateway_custom_domain" {
   description = "Custom domain name for API Gateway"
-  value       = "https://${aws_api_gateway_domain_name.main.domain_name}"
+  value       = var.domain_name != "example.com" ? "https://${aws_api_gateway_domain_name.main[0].domain_name}" : "Not configured - using example.com"
 }
 
 output "api_gateway_id" {
@@ -157,7 +157,7 @@ output "deployment_summary" {
   value = {
     cluster_name     = module.eks.cluster_name
     api_gateway_url  = "https://${aws_api_gateway_rest_api.main.id}.execute-api.${var.aws_region}.amazonaws.com/${aws_api_gateway_stage.main.stage_name}"
-    custom_api_url   = "https://${aws_api_gateway_domain_name.main.domain_name}"
+    custom_api_url   = var.domain_name != "example.com" ? "https://${aws_api_gateway_domain_name.main[0].domain_name}" : "Not configured"
     application_url  = "https://${aws_lb.main.dns_name}"
     ecr_repository   = aws_ecr_repository.app.repository_url
     region          = var.aws_region

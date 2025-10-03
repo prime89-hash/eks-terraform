@@ -39,8 +39,10 @@ resource "aws_api_gateway_rest_api" "main" {
 # API GATEWAY DOMAIN NAME (Custom Domain)
 # -----------------------------------------------------------------------------
 # Creates a custom domain name for the API Gateway
-# This allows users to access the API via a friendly domain name
+# Only create if not using example.com
 resource "aws_api_gateway_domain_name" "main" {
+  count = var.domain_name != "example.com" ? 1 : 0
+  
   domain_name              = "api.${var.domain_name}"
   regional_certificate_arn = aws_acm_certificate.api.arn
 
@@ -74,13 +76,18 @@ resource "aws_acm_certificate" "api" {
 }
 
 # Certificate validation (requires DNS records to be created)
+# Note: This may timeout if DNS validation records are not created
+# You can manually validate the certificate in AWS Console if needed
 resource "aws_acm_certificate_validation" "api" {
   certificate_arn = aws_acm_certificate.api.arn
   
   # Timeout for certificate validation
   timeouts {
-    create = "5m"
+    create = "10m"
   }
+  
+  # Make this optional - comment out if DNS validation fails
+  count = var.domain_name != "example.com" ? 1 : 0
 }
 
 # -----------------------------------------------------------------------------
@@ -188,9 +195,8 @@ resource "aws_api_gateway_integration" "health" {
   type                    = "HTTP"
   integration_http_method = "GET"
   
-  # URI points to the internal load balancer (ALB) of EKS
-  # This will be updated after EKS deployment
-  uri = "http://${aws_lb.main.dns_name}/health"
+  # URI points to the Network Load Balancer
+  uri = "http://${aws_lb.nlb.dns_name}/health"
 
   # Connection type: VPC_LINK for private network access
   connection_type = "VPC_LINK"
@@ -215,7 +221,7 @@ resource "aws_api_gateway_integration" "users_get" {
 
   type                    = "HTTP"
   integration_http_method = "GET"
-  uri                     = "http://${aws_lb.main.dns_name}/api/users"
+  uri                     = "http://${aws_lb.nlb.dns_name}/api/users"
   connection_type         = "VPC_LINK"
   connection_id           = aws_api_gateway_vpc_link.main.id
 
@@ -235,7 +241,7 @@ resource "aws_api_gateway_integration" "users_post" {
 
   type                    = "HTTP"
   integration_http_method = "POST"
-  uri                     = "http://${aws_lb.main.dns_name}/api/users"
+  uri                     = "http://${aws_lb.nlb.dns_name}/api/users"
   connection_type         = "VPC_LINK"
   connection_id           = aws_api_gateway_vpc_link.main.id
 
@@ -255,7 +261,7 @@ resource "aws_api_gateway_integration" "user_get" {
 
   type                    = "HTTP"
   integration_http_method = "GET"
-  uri                     = "http://${aws_lb.main.dns_name}/api/users/{id}"
+  uri                     = "http://${aws_lb.nlb.dns_name}/api/users/{id}"
   connection_type         = "VPC_LINK"
   connection_id           = aws_api_gateway_vpc_link.main.id
 
@@ -268,16 +274,74 @@ resource "aws_api_gateway_integration" "user_get" {
 }
 
 # -----------------------------------------------------------------------------
+# NETWORK LOAD BALANCER FOR VPC LINK
+# -----------------------------------------------------------------------------
+# VPC Link requires NLB, not ALB
+resource "aws_lb" "nlb" {
+  name               = "${var.project_name}-nlb"
+  internal           = true
+  load_balancer_type = "network"
+  subnets            = module.vpc.private_subnets
+
+  enable_deletion_protection = var.environment == "prod"
+
+  tags = {
+    Name = "${var.project_name}-nlb"
+  }
+}
+
+# NLB Target Group
+resource "aws_lb_target_group" "nlb" {
+  name        = "${var.project_name}-nlb-tg"
+  port        = 80
+  protocol    = "TCP"
+  vpc_id      = module.vpc.vpc_id
+  target_type = "alb"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    port                = "traffic-port"
+    protocol            = "TCP"
+    timeout             = 10
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Name = "${var.project_name}-nlb-tg"
+  }
+}
+
+# NLB Listener
+resource "aws_lb_listener" "nlb" {
+  load_balancer_arn = aws_lb.nlb.arn
+  port              = "80"
+  protocol          = "TCP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.nlb.arn
+  }
+}
+
+# Target Group Attachment - ALB as target
+resource "aws_lb_target_group_attachment" "nlb_to_alb" {
+  target_group_arn = aws_lb_target_group.nlb.arn
+  target_id        = aws_lb.main.arn
+  port             = 80
+}
+
+# -----------------------------------------------------------------------------
 # VPC LINK (Private Network Connection)
 # -----------------------------------------------------------------------------
-# Creates a VPC Link to connect API Gateway to private resources (ALB)
-# This allows API Gateway to reach services in private subnets securely
+# Creates a VPC Link to connect API Gateway to private resources (NLB)
 resource "aws_api_gateway_vpc_link" "main" {
   name        = "${var.project_name}-vpc-link"
-  description = "VPC Link for API Gateway to connect to internal ALB"
+  description = "VPC Link for API Gateway to connect to internal NLB"
   
-  # Target the internal Application Load Balancer
-  target_arns = [aws_lb.main.arn]
+  # Target the Network Load Balancer (required for VPC Link)
+  target_arns = [aws_lb.nlb.arn]
 
   tags = {
     Name = "${var.project_name}-vpc-link"
@@ -506,7 +570,9 @@ resource "aws_cloudwatch_log_group" "api_gateway" {
 # -----------------------------------------------------------------------------
 # Maps the custom domain to the API Gateway stage
 resource "aws_api_gateway_base_path_mapping" "main" {
+  count = var.domain_name != "example.com" ? 1 : 0
+  
   api_id      = aws_api_gateway_rest_api.main.id
   stage_name  = aws_api_gateway_stage.main.stage_name
-  domain_name = aws_api_gateway_domain_name.main.domain_name
+  domain_name = aws_api_gateway_domain_name.main[0].domain_name
 }
